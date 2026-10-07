@@ -1,55 +1,69 @@
 # j-talk 설계 결정
 
-j-talk 최소 구현에 필요한 설계 결정을 정리한다. 제품군 공통 기준은 `j-groupware/docs/architecture.md`를 따르고, 이 문서는 그 위에서 j-talk이 정한 내용만 적는다. 각 결정은 PMT project `8802d242-05ee-4538-bb8d-31a6bcb24607`에 같은 번호의 `결정 N` 레코드로 기록되어 있다.
+j-talk만의 설계 결정을 적는다. 제품군 공통 결정은 [`j-groupware/docs/architecture.md`](https://github.com/wnwjdals7498/j-groupware/blob/main/docs/architecture.md)(이하 architecture.md)의 S 번호를 따르고 여기서는 링크만 한다. PMT는 통합 project `j-groupware-suite`의 분류 `j-talk`에 같은 번호로 기록한다(S16).
 
-결정일: 2026-10-07
+정리일: 2026-10-07. 통합 정리에서 결정 번호를 다시 매겼다. 이전 번호는 끝의 대응 표를 본다.
 
 ## 0. 범위
 
-- **범위(architecture.md §4, j-groupware 결정 23):**
-  - j-messenger 서버 구조(outbox + WSS)를 복제해 줄인다.
-  - 손님(고객의 고객)이 삽입형 위젯으로 문의를 남기면, 권한 있는 하위 회원이 전체 문의방을 보고 배정·응대·종료한다.
-  - 손님 화면은 삽입형 js·css 위젯이다. j-groupware 결정 22("화면은 j-groupware에서만")의 유일한 예외다.
-  - 하위 회원 상담 화면은 j-groupware 메뉴다. j-talk은 API만 만든다.
+- **범위:**
+  - j-messenger 서버 구조(outbox + WSS)를 줄여 복제한다.
+  - 손님은 고객 웹사이트에 삽입한 위젯으로 문의한다(architecture.md S7). 권한 있는 하위 회원은 j-groupware "상담" 메뉴에서 전체 문의방을 보고 배정·응대·종료한다(j-groupware 결정 13).
+  - j-talk은 API와 위젯만 만든다.
 - **완료 기준:** 위젯으로 보낸 손님 메시지가 j-groupware 상담 목록에 실시간으로 표시되고, 하위 회원이 배정·답장·종료할 수 있다.
 - **배치:**
-  - 고객 VM(tenant plane) 안에서 동작한다.
-  - 손님 위젯·손님 API·WSS는 gateway 예외 경로 `/ext/talk/`로 j-talk 내부 포트에 바로 넘어간다(j-groupware 결정 17·23).
-  - 하위 회원 API·WSS는 내부 포트로만 열고 j-groupware 서버가 중계한다.
-  - j-talk에 가입한 고객에게만 설치한다(architecture.md 3장 서비스 가입 모델).
-- **선행:** j-messenger 서버 구조, j-customer-auth-db 손님 JWT·JWKS(C2·C4), j-auth 서비스 카탈로그(j-auth 결정 25), architecture.md §5 순서 7.
+  - 고객 서버의 선택 서비스다.
+  - 손님 위젯·손님 API·WSS는 `/ext/talk/` 예외 경로로 연다(S6).
+  - 하위 회원 API·WSS는 내부 포트로만 열고 j-groupware가 중계한다.
+- **관련 공통 결정:** S2(서비스·DB), S3(권한), S4(토큰 전달), S6(예외 경로·남용 방지), S7(위젯), S8~S14.
 
-## 1. 손님 식별과 위젯
+## 1. 권한과 손님
 
-### 결정 3. 방문자 토큰 형식과 보관
+### 결정 1. 기능 권한
+- **결정:** role client `j-talk`의 `talk:read`(문의방 목록·조회)와 `talk:write`(배정·답장·종료, 허용 출처·위젯 비밀키 관리)를 쓴다. `talk:write`는 `talk:read`를 포함한다(S3 카탈로그).
+- **이유:** board·guest와 같은 read/write 패턴이다.
+
+### 결정 2. 손님 식별: 방문자 토큰과 손님 구분자
 - **결정:**
-  - 손님은 익명으로 시작한다. j-talk이 불투명 랜덤 방문자 토큰을 발급한다.
-  - DB에는 토큰 해시만 저장한다. 서버에서 회수할 수 있다.
-  - 위젯은 고객 사이트의 localStorage에 토큰을 보관하고 `Authorization` 헤더로 보낸다.
-  - 수명·회전 규칙은 T2 contracts에서 확정한다.
-- **이유:** 위젯은 고객 사이트에서 `gw.<tenant>.jgw.test`로 교차 출처 호출을 하므로 쿠키는 서드파티 쿠키 차단의 영향을 받는다. 불투명 토큰은 서버에서 즉시 회수할 수 있다.
+  - **방문자 토큰:**
+    - 손님은 익명 방문자로 시작한다. j-talk이 불투명 랜덤 방문자 토큰을 발급하고 DB에는 해시만 저장한다. 서버에서 회수할 수 있다.
+    - 위젯은 고객 사이트의 localStorage에 토큰을 두고 `Authorization` 헤더로 보낸다.
+    - 수명·회전 규칙은 T2 contracts에서 정한다.
+  - **손님 구분자 (사용자):**
+    - 고객 사이트가 손님을 알면 위젯 속성으로 구분자를 넘긴다.
+    - j-talk은 서명을 확인한 뒤 그 방문자의 문의방을 해당 손님(j-customer-auth-db 손님 id) 앞으로 저장한다.
+    - 이미 그 손님 앞으로 된 진행 중 문의방이 있으면 거기에 잇는다.
+  - **서명 형식 (S7):**
+    - 속성은 `data-guest-id`, `data-guest-exp`(유닉스 초), `data-guest-sig`다.
+    - `data-guest-sig` = HMAC-SHA256(위젯 비밀키, `tenant|guestId|exp`)을 base64url로 쓴 값이다.
+    - j-talk은 만료(`exp`)와 서명을 상수 시간으로 비교한다. 서명이 없거나 틀리거나 만료됐으면 익명으로 처리하고, 위젯에는 오류를 보이지 않는다.
+  - **위젯 비밀키:**
+    - tenant마다 j-talk DB에 둔다.
+    - j-groupware 상담 설정(`talk:write`)에서 발급·교체한다. 원문은 1회만 보여 준다.
+    - 교체할 때는 새 키와 직전 키를 일정 시간(기본 24시간) 함께 받는다.
+    - 서명을 검증하려면 원문이 필요하므로 원문을 저장한다. 그래서 DB 백업은 비밀값으로 다룬다.
+  - j-talk은 j-customer-auth-db를 호출하지 않는다. 손님 이름 표시는 j-groupware가 한다.
+- **이유:**
+  - 쿠키는 고객 사이트에서 교차 출처로 쓰면 서드파티 쿠키 차단을 받으므로 헤더 토큰을 쓴다.
+  - 구분자를 서명 없이 믿으면 누구나 다른 손님의 대화를 열 수 있다.
 
-### 결정 4. 손님 로그인 시 대화 연결
+### 결정 3. 허용 출처
 - **결정:**
-  - 위젯 안에서 j-customer-auth-db 손님 로그인을 하면 j-talk이 손님 JWT를 JWKS로 서명 검증한다(j-customer-auth-db 결정 2).
-  - 같은 방문자 토큰의 진행 중 문의방을 그 손님 계정에 연결한다. 이후 대화는 손님 계정 기준으로 이어진다.
-- **이유:** 손님이 로그인 전에 남긴 문의가 끊기지 않는다.
+  - 위젯 허용 출처(Origin) 목록은 j-talk DB(`tenant_id` 포함)에 둔다.
+  - j-groupware 상담 설정과 j-web 배포 후 처리(j-groupware 결정 14)가 Bearer(`talk:write`)로 관리 API를 호출해 등록·삭제한다.
+  - CORS와 WSS Origin을 이 목록으로 검사하고, 미등록 출처는 거절한다.
+- **이유:** 검사하는 서비스가 데이터를 소유하고, 서비스 호출이 j-groupware → 서비스 한 방향이다.
 
-### 결정 6. 허용 출처 저장 위치
-- **결정:**
-  - 위젯 허용 출처(Origin) 목록은 j-talk DB(`tenant_id` 포함)에 저장한다.
-  - j-groupware 상담 설정 화면이 Bearer(`talk:write`)로 j-talk 관리 API를 호출해 등록·삭제한다.
-  - j-talk이 CORS와 WSS Origin을 이 목록으로 검사한다. 미등록 출처는 거절한다.
-  - j-web 사이트 도메인 자동 등록은 j-web 결정 세션에서 같은 API를 쓰도록 요청한다.
-- **이유:** 검사하는 서비스가 데이터를 소유하고, 서비스 간 호출을 j-groupware → 서비스 한 방향으로 유지한다(j-approval 결정 21).
-
-### 결정 7. 위젯 구현 방식
+### 결정 4. 위젯 구현과 배포
 - **결정:**
   - `apps/widget`에 바닐라 TypeScript로 만든다. Shadow DOM 안에 오른쪽 아래 FAB와 대화창을 그린다.
-  - Vite library 빌드로 `/ext/talk/v1/widget.js`·`widget.css`를 만든다. 경로에 메이저 버전을 넣고 내용 해시로 캐시를 관리한다.
-  - 삽입은 `<script src="https://gw.<tenant>.jgw.test/ext/talk/v1/widget.js" async></script>` 한 줄이다. css는 widget.js가 불러온다.
-  - 표시 조건 세 가지(고객이 j-talk에 가입함, 출처가 허용됨, j-talk이 동작 중) 중 하나라도 아니면 버튼을 그리지 않는다.
-- **이유:** 고객 사이트에 싣는 크기를 최소로 하고 고객 사이트의 프레임워크·CSS와 충돌하지 않는다.
+  - **배포 (사용자):**
+    - Vite library 빌드로 CSS를 JS에 넣어 압축한 파일 하나 `widget.min.js`를 만든다. CSS는 Shadow DOM 안에 주입한다.
+    - 고정 주소 `/ext/talk/v1/widget.min.js`로 서빙한다. 파일 이름에 해시를 넣지 않고 `Cache-Control: max-age=300`과 ETag를 쓴다. 그래서 새로 배포하면 모든 사이트가 몇 분 안에 최신 위젯을 받는다. 호환이 깨질 때만 `v2` 경로를 새로 연다.
+  - 삽입은 `<script src="https://gw.<tenant>.jgw.test/ext/talk/v1/widget.min.js" async></script>` 한 줄이고, 손님 구분자를 넘길 때만 `data-guest-*` 속성을 더한다.
+  - 표시 조건(j-talk 동작 중, 출처 허용됨, 가입함) 중 하나라도 아니면 버튼을 그리지 않는다. 미가입 고객 서버에서는 gateway가 같은 주소에 빈 스크립트를 준다(S7).
+  - 크기 목표는 압축 후 30KB 이하다.
+- **이유:** 고객 사이트에 싣는 파일이 하나이고, 사이트를 다시 배포하지 않아도 항상 최신이다. 고객 사이트의 CSS·프레임워크와 충돌하지 않는다.
 
 ## 2. 상담과 실시간 전달
 
@@ -57,76 +71,65 @@ j-talk 최소 구현에 필요한 설계 결정을 정리한다. 제품군 공�
 - **결정:**
   - 문의방 상태는 대기(미배정) → 진행(담당 1명) → 종료다.
   - `talk:write` 보유자가 배정·재배정·답장·종료한다.
-  - 종료된 방에 손님이 다시 메시지를 보내면 새 문의방을 만든다. 종료된 방의 변경 요청은 409다.
-- **이유:** 완료 기준(배정·답장·종료)을 가장 단순하게 만족한다. 재개·다중 담당은 backlog다.
+  - 종료된 방에 손님이 다시 메시지를 보내면 새 문의방을 만든다. 종료된 방을 바꾸려 하면 409다.
+- **이유:** 완료 기준을 가장 단순하게 만족한다. 재개·다중 담당은 backlog다.
 
-### 결정 2. 실시간 전달 구조
+### 결정 6. 실시간 전달
 - **결정:**
-  - j-messenger와 같이 쓰기 트랜잭션 안에서 메시지·dedup·`event_outbox`를 함께 기록한다.
-  - commit 후 realtime 모듈이 250ms 간격으로 outbox를 폴링해 WSS로 보낸다.
+  - j-messenger처럼 쓰기 트랜잭션 안에서 메시지·dedup·`event_outbox`를 함께 기록한다.
+  - commit 후 250ms 간격으로 outbox를 폴링해 WSS로 보낸다.
   - 재연결 복구는 j-messenger의 서명 cursor + sync API를 줄여서 쓴다.
-- **이유:** j-messenger 코드를 그대로 옮길 수 있고 연결이 끊겨도 이벤트가 유실되지 않는다. LISTEN/NOTIFY는 지연이 문제가 될 때 backlog로 검토한다.
+- **이유:** j-messenger 코드를 옮길 수 있고 연결이 끊겨도 이벤트가 유실되지 않는다. LISTEN/NOTIFY는 backlog다.
 
-### 결정 8. 하위 회원 상담 API·실시간 경로
+### 결정 7. 하위 회원 API·실시간 경로
 - **결정:**
-  - j-groupware 상담 화면은 j-groupware 서버를 통해 j-talk 내부 API(HTTP)와 WSS에 접근한다. j-groupware가 중계하면서 Bearer를 붙인다.
-  - j-talk은 j-auth 결정 19 기준(RS256, iss, `azp=j-auth`, aud에 `j-talk`, `tenant` claim, 허용 tenant)으로 토큰을 검증하고 `talk:read`/`talk:write`를 검사한다.
-  - 응답 구분: 토큰 무효 401, 권한 없음·출처 불허 403, 없음(다른 tenant 포함) 404, 종료 후 변경 409, j-auth·j-customer-auth-db JWKS 장애 503.
-- **이유:** 메신저와 같은 방식(j-groupware 결정 22)이라 브라우저는 `gw.<tenant>`에만 연결한다.
+  - j-groupware가 내부 HTTP·WSS로 중계하며 Bearer를 붙인다. j-talk은 j-auth 기준으로 검증하고(aud `j-talk`, S4) `talk:read`/`talk:write`를 검사한다.
+  - 응답 구분: 401, 403(권한 없음·출처 불허), 404(다른 tenant 포함), 409(종료 후 변경), 429(제한 초과), 503(JWKS 장애).
+- **이유:** 메신저와 같은 방식이라 브라우저는 `gw.<tenant>`에만 연결한다.
 
-## 3. 인증과 권한
-
-### 결정 1. 기능 권한 이름과 위치
+### 결정 8. 남용 방지
 - **결정:**
-  - 고객 realm마다 role 전용 client `j-talk`(로그인 흐름 끔)에 기능 role `talk:read`(문의방 목록·조회)와 `talk:write`(배정·답장·종료, 허용 출처 등록)를 둔다(j-auth 결정 16·25).
-  - j-talk에 가입한 고객의 `tenant:admin` 묶음과 회원 관리 API 부여 가능 role에 들어간다. 쓰기를 체크하면 읽기를 포함한다(j-groupware G6 규칙).
-  - `j-auth` client 고정 audience mapper에 aud `j-talk`을 추가한다(j-auth 결정 19).
-- **이유:** board·guest와 같은 read/write 패턴이고 서비스별 role client 방식이라 규칙이 하나로 유지된다.
+  - gateway 제한(S6)에 더해 j-talk이 자체 제한을 둔다. 기본값은 설정으로 바꿀 수 있다.
+    - 방문자 토큰 발급: IP당 분당 10회
+    - 메시지: 방문자당 분당 20개, 1개 최대 4KB
+    - 방문자당 동시에 열린 문의방: 1개
+  - 초과하면 429이고, 위젯은 잠시 후 다시 보내라는 안내를 보여 준다.
+  - HTML은 받지 않고 텍스트로만 저장·표시한다.
+- **이유:** 누구나 호출할 수 있는 공개 쓰기 경로라 최소 제한이 필요하다. 고도화(캡차·차단 목록)는 backlog다.
 
-## 4. 데이터·검증·배포
+## 3. 데이터·검증·배포
 
 ### 결정 9. 저장소·DB·테스트·배포
 - **결정:**
-  - j-messenger 골격을 복사해 줄인다(`apps/server`, `apps/widget`, `packages/contracts`). 도구·scripts 버전은 같게 고정한다.
-  - 고객 VM PostgreSQL 인스턴스에 database `jgw_talk`과 전용 계정을 둔다. 드라이버는 `pg`, 마이그레이션은 node-pg-migrate SQL 파일, 쿼리는 SQL 직접 작성이다. 모든 테이블에 `tenant_id`를 둔다.
-  - Vitest로 실제 j-auth·Keycloak·PostgreSQL·j-customer-auth-db를 대상으로 시나리오를 검증한다. 상담 화면 e2e는 j-groupware에서 한다.
-  - 로컬에서 완료한 뒤 고객 VM에서 다시 검증한다.
-  - 로컬 HTTPS, 비표준 기본 포트 + 설정 변경, 3001 미사용.
-- **이유:** 형제 서비스 공통 규칙(architecture.md §3, j-mail 결정 8·9, j-approval 결정 10·11)과 같다.
+  - S11 골격에 `apps/widget`을 더한다(`apps/server`, `apps/widget`, `packages/contracts`). contracts는 레지스트리에 게시한다(S10).
+  - 고객 서버 PostgreSQL에 database `jgw_talk`과 전용 계정을 둔다(S2, S9). 모든 테이블에 `tenant_id`를 둔다(S8).
+  - Vitest로 실제 j-auth·Keycloak·PostgreSQL을 대상으로 검증한다. talk 권한 회원은 j-auth 회원 관리 API로 만들고 지운다(S12). 위젯 서명은 테스트가 비밀키로 직접 만든다.
+  - 상담 화면 e2e는 j-groupware G19에서 한다. 로컬 완료 후 고객 서버 VM에서 다시 검증한다.
+- **이유:** 형제 서비스와 같은 규칙이다.
 
-## 5. 작업 구성
+## 4. 작업 구성
 
-### 결정 0. PMT 계층과 Item 구성
-- PMT 계층은 environment `j-groupware-suite` → repository `j-talk`(`b5a6d043-329f-4291-8a0a-254cda729e0b`) → project `j-talk`(`8802d242-05ee-4538-bb8d-31a6bcb24607`)이다.
-- Work W1 "j-talk 최소 구현"(`b3e60f64-dada-4c78-a81a-105ceea003b6`)의 완료 기준은 0장 완료 기준과 같다. 사용자가 제안 구성을 승인했다.
-- Item 사이의 순서는 `blocked_by`로 건다.
+PMT 통합 project 분류 `j-talk`. Work "j-talk 최소 구현"의 완료 기준은 0장과 같다.
 
-| 순서 | Item | 완료 기준 요약 | 선행 |
+| Item | 완료 기준 요약 | 선행 |
+| --- | --- | --- |
+| T1 저장소 골격 | S11 골격 + `apps/widget`, `jgw_talk`·전용 계정·마이그레이션, 로컬 HTTPS·포트, Git 제외 env | j-auth I4, X1 |
+| T2 contracts | 손님 API·상담 API·관리 API(허용 출처, 위젯 비밀키) schema·DTO, WSS 이벤트·sync cursor, 방문자 토큰·구분자 서명 규칙, 상태 모델, 오류 코드, 레지스트리 게시 | T1 |
+| T4 인증·권한 게이트 | `@j-auth/contracts` 설치, 하위 회원 Bearer 검증·`talk:*`, 방문자 토큰, 구분자 서명 검증(결정 2), CORS·WSS Origin, 허용 tenant, 401·403·404·429·503 | T2, j-auth I2·I4 |
+| T5 상담 엔진 | 문의방·메시지·방문자·허용 출처·위젯 비밀키·outbox 테이블(tenant_id), 손님 메시지 → 대기 문의방, 손님 구분자 연결, 배정·답장·종료, outbox → WSS, 관리 API, 결정 8 제한, tenant 격리 테스트 | T4 |
+| T6 위젯 | `widget.min.js` 단일 파일(CSS 포함)·고정 주소·짧은 캐시, Shadow DOM FAB·대화창, 표시 3조건, 방문자 토큰·`data-guest-*` 전송, 실시간 수신·재연결, 429 안내, 삽입 예제 페이지 | T5 |
+| T7 완료 기준 테스트 | 실제 의존성 Vitest: 위젯 메시지 → 하위 회원 WSS·목록, 배정·답장·종료, 401·403, 미등록 출처 거절, 서명 구분자 연결·위조 서명 익명 처리, 제한 초과 429, tenant 격리, 503 | T5, T6, j-auth I6 |
+| T8 고객 서버 검증 | `provision-service`로 설치·해지(해지 후 빈 위젯 스크립트), systemd·내부 포트, `/ext/talk/` 경로, 허용 출처 사이트 위젯 → j-groupware 상담 화면, VM 대상 T7 | T7, j-groupware G10·G18·G19 |
+| T3 | 완료(Done): 변경 요청 반영 확인 | - |
+
+backlog: 첨부 파일, 상담 알림(j-mail·메신저), 자동 배정·업무 시간, 문의방 재개·다중 담당, 상담 만족도, 대화 보존 정책, 남용 방지 고도화(캡차·차단 목록), outbox LISTEN/NOTIFY, OIDC 전환.
+
+## 이전 번호 대응
+
+| 새 | 이전 | 새 | 이전 |
 | --- | --- | --- | --- |
-| T1 | 저장소 골격 | workspaces(apps/server, apps/widget, packages/contracts), j-messenger 도구 복사·버전 고정, `jgw_talk` database·전용 계정·마이그레이션, 로컬 HTTPS·비표준 포트, 비밀값은 Git 제외 env | j-auth I4 |
-| T2 | contracts | 손님 API·상담 API TypeBox schema·DTO, WSS 이벤트·sync cursor, 방문자 토큰 규칙, 상태 모델, 오류 코드, `npm pack` 가능 | T1 |
-| T3 | 변경 요청 | 6장 요청을 j-auth·j-groupware·j-web에 전달하고 등록 확인 | - |
-| T4 | 인증·권한 게이트 | j-auth·j-customer-auth-db contracts vendor, 하위 회원 Bearer 검증(aud `j-talk`)·`talk:*`, 방문자 토큰, 손님 JWT 검증·대화 연결, CORS·WSS Origin 검사, 허용 tenant, 401·403·404·503 구분 | T2, T3, j-auth I2·I4, j-customer-auth-db C4 |
-| T5 | 상담 엔진 | 문의방·메시지·방문자·허용 출처·outbox 테이블(tenant_id), 손님 메시지 → 대기 문의방, 배정·답장·종료, outbox 폴링 → WSS, 허용 출처 관리 API, tenant 격리 테스트 | T4 |
-| T6 | 위젯 | widget.js·css 빌드·해시 캐시, Shadow DOM FAB·대화창, 표시 3조건, 방문자 토큰 보관·전송·실시간 수신·재연결, 손님 로그인, 삽입 예제 페이지 | T5 |
-| T7 | 완료 기준 테스트 | 실제 의존성 Vitest: 위젯 API 메시지 → 하위 회원 WSS·목록 실시간 표시, 배정·답장·종료, 401·403, 미등록 출처 거절, 손님 로그인 연결, tenant 격리, 장애 503 | T5, T6 |
-| T8 | 고객 VM 검증 | VM에서 systemd·`jgw_talk` 마이그레이션·내부 포트, gateway `/ext/talk/` 예외 경로, 허용 출처 사이트 위젯 → j-groupware 상담 화면 배정·답장·종료, VM 대상 T7 통과 | T7, j-groupware G10·G18·상담 화면 |
-
-PMT Item ID: T1 `9277ca53-c2b7-467e-9fa5-29d89069e89b`, T2 `1497230f-8bb1-41d4-8e08-42ed28e292bf`, T3 `f2144257-1ddd-4233-b014-903ce2a8c6f1`, T4 `1b46ec23-e6ec-4576-b001-012ed2d7393b`, T5 `deaeb4af-d098-4f34-9d23-13f5602fe573`, T6 `c8725be8-7388-4211-8c1f-9d39418e2fe9`, T7 `737e0511-190e-41cd-978d-444d1970c4a6`, T8 `3a1aa70e-adc6-47bb-bd48-2bb1ca1c95bc`.
-
-T8의 j-groupware G18·상담 화면 Item은 PMT에 아직 없어 `blocked_by`에 넣지 않았다. 등록되면 추가한다.
-
-backlog: 첨부 파일, 상담 알림(j-mail·메신저), 자동 배정·업무 시간, 문의방 재개·다중 담당, 상담 만족도, 대화 보존 정책, 방문자 남용 방지 고도화, outbox LISTEN/NOTIFY, OIDC 전환.
-
-## 6. 다른 서비스에 넘길 변경 요청
-
-2026-10-07 사용자 지시로 각 대상 프로젝트 PMT에 backlog 레코드로 등록했다. 반영 확인 후 T3을 완료한다.
-
-| 번호 | 대상 | 요청 | PMT 레코드 |
-| --- | --- | --- | --- |
-| R1 | j-auth | 서비스 카탈로그(결정 25)에 j-talk 추가. 고객 realm에 role 전용 client `j-talk`과 `talk:read`·`talk:write`, `tenant:admin` 묶음 포함, `j-auth` client scope mapping 추가 | `4866ca80-b6a4-4973-a4e4-a6dfbd1cd3c2` |
-| R2 | j-auth | `j-auth` client audience mapper와 contracts aud 상수에 `j-talk` 추가 | `c099a27c-f0bf-41d1-abaf-0a078d9867c3` |
-| R3 | j-auth | 회원 관리 API 부여 가능 role에 `talk:read`·`talk:write`, 테스트 계정(talk 권한 보유·`talk:read`만 보유·미보유 하위 회원) | `ed291fc1-05d2-4349-b31a-27d9f0bb583a` |
-| R4 | j-groupware | 상담 메뉴(`talk:read`, 전체 문의방·배정·답장·종료)와 상담 설정(허용 출처 등록, 설치 안내 스니펫), j-talk HTTP·WSS 중계 + Bearer, 회원 관리 화면에서 두 권한 부여, 권한 표 항목 | `6d0b7262-151c-4966-a6ed-ea5c5e6d80cf` |
-| R5 | j-groupware | `gw.conf.template`의 `/ext/talk/` → j-talk 내부 포트 예외 경로 반영 확인, 내부 포트 값 전달 | `ce3a8454-ba66-430d-82f7-52cebdab337b` |
-| R6 | j-web | j-talk 동시 가입 시 템플릿 배포에 스니펫 자동 삽입, 사이트 도메인을 j-talk 허용 출처 API로 자동 등록 | `c7161421-3b0b-46be-95cd-36fb9d0d48f1` |
+| 1 | 1 | 6 | 2 |
+| 2 | 3, 4 (+손님 구분자 서명) | 7 | 8 |
+| 3 | 6 | 8 | 새로 추가 |
+| 4 | 7 (min.js 단일 파일) | 9 | 9 |
+| 5 | 5 | - | 0 → 4장 작업 구성, 6장 요청은 모두 반영되어 삭제 |
