@@ -6,6 +6,8 @@ j-talk이 제공해야 하는 기능 목록이다. 근거는 [`decisions.md`](de
 
 작성일: 2026-10-07
 
+상세 동작·입출력·실패 처리·인수 시험은 [기능 명세](feature-specifications.md)를 따른다.
+
 ## 1. 손님 위젯 (`apps/widget`)
 
 | ID | 기능 | 핵심 동작 | 근거 | Item |
