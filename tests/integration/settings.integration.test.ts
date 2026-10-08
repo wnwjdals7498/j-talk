@@ -49,22 +49,34 @@ describe("actual tenant talk settings and membership", () => {
       rolcreatedb: false,
       rolcreaterole: false,
     });
-    const other = new Pool({ ...r.pool.options, database: "postgres" });
+    const other = new Pool({
+      ...r.pool.options,
+      database: "postgres",
+      password: r.pool.options.password!,
+    });
     try {
-      await expect(other.query("SELECT 1")).rejects.toThrow();
+      await expect(other.query("SELECT 1")).rejects.toMatchObject({
+        code: "42501",
+      });
     } finally {
       await other.end();
     }
     const old = (
-      await r.pool.query<{ checksum: string }>(
-        "SELECT checksum FROM schema_migrations LIMIT 1",
+      await r.pool.query<{ name: string; checksum: string }>(
+        "SELECT name,checksum FROM schema_migrations ORDER BY name LIMIT 1",
       )
-    ).rows[0]!.checksum;
-    await r.pool.query("UPDATE schema_migrations SET checksum='altered'");
+    ).rows[0]!;
+    await r.pool.query(
+      "UPDATE schema_migrations SET checksum='altered' WHERE name=$1",
+      [old.name],
+    );
     try {
       await expect(migrate(r.pool)).rejects.toThrow("modified");
     } finally {
-      await r.pool.query("UPDATE schema_migrations SET checksum=$1", [old]);
+      await r.pool.query(
+        "UPDATE schema_migrations SET checksum=$1 WHERE name=$2",
+        [old.checksum, old.name],
+      );
     }
     await migrate(r.pool);
     await expect(

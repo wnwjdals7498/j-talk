@@ -172,6 +172,12 @@ export async function integrationRuntime() {
     try {
       for (const app of apps.reverse()) await app.close();
       for (const f of fixtures) {
+        await pool.query("DELETE FROM event_outbox WHERE tenant_id=$1", [
+          f.tenant,
+        ]);
+        await pool.query("DELETE FROM messages WHERE tenant_id=$1", [f.tenant]);
+        await pool.query("DELETE FROM rooms WHERE tenant_id=$1", [f.tenant]);
+        await pool.query("DELETE FROM visitors WHERE tenant_id=$1", [f.tenant]);
         await pool.query("DELETE FROM allowed_origins WHERE tenant_id=$1", [
           f.tenant,
         ]);

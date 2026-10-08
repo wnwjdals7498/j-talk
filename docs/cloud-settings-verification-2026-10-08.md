@@ -18,6 +18,6 @@ DB는 jgw_talk 전용 non-superuser, 모든 업무 표 tenant_id, parameter quer
 
 검증은 S12대로 j-auth API로 고유 고객 realm·서비스 가입·write/read/no-role 회원을 만들고 Code/PKCE 후 실제 token exchange를 사용한다. 전용 DB port 55044, test HTTP 55045/55049를 쓴다. 실제 Origin CRUD/페이지/tenant, HMAC 위조/만료/다른 tenant, 교체 deadline·동시 교체, 401/403/404/409/503, migration 변조 탐지·다른 DB 거절, 실제 DB stop/start 후 보존을 검사한다. Node 22.18.0·24.19.0의 최종 결과는 외부 `.suite-runtime/j-talk/settings-node{22,24}-final-results.json`에 기록한다. 최초 DB stop 실행은 assertion 8개가 통과했으나 runner exit 1이어서 성공 증거로 쓰지 않았다. 유휴 pool 오류 처리를 추가하고 exit 0으로 재검증했다.
 
-방문자 수명/회전/회수·WSS 인증 운반·guestId 재연결/다른 손님 충돌은 제품 정책 관문이다. 방/메시지/outbox/cursor DTO와 엔진은 구현자가 계속 정할 기술 작업이다. widget 및 전체 T7/VM 인수는 미실행이다.
+방문자 수명/회전/회수·WSS 인증 운반·guestId 재연결/다른 손님 충돌은 제품 정책 관문이다. 방/메시지/outbox/cursor DTO와 엔진은 구현자가 계속 정할 기술 작업이다. 회원 저장·권한과 widget 파일의 후속 검증은 [회원 저장·위젯 검증](cloud-member-room-widget-2026-10-08.md)에 기록한다. 전체 T7/VM 인수는 미실행이다.
 
 최종 결과: Node 22.18.0·24.19.0 실제 integration 각각 8/8, skip 0, runner exit 0. `npm run check`의 build·typecheck·unit 1개·lint·format도 통과했다. 형제 BFF 전체 회귀는 최초 새 DB port 충돌을 해결한 뒤 133/133 통과했으며 55044/55045/55049 구성에서 상담 integration을 다시 실행했다.

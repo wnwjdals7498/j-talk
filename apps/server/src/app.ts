@@ -1,5 +1,9 @@
 import Fastify, { LogController } from "fastify";
-import type { FastifyServerOptions, FastifyError } from "fastify";
+import type {
+  FastifyServerOptions,
+  FastifyError,
+  FastifyRequest,
+} from "fastify";
 import type { ServerOptions as HttpsOptions } from "node:https";
 import type { Pool } from "pg";
 import type { TokenVerifier } from "@j-auth/token-verifier";
@@ -8,6 +12,26 @@ import { TALK_PATHS } from "@j-talk/contracts";
 import { ApiError, unavailable } from "./errors.js";
 import { memberGate } from "./auth.js";
 import { TalkSettings } from "./settings.js";
+import { TalkRooms } from "./rooms.js";
+import { widgetArtifact } from "./widget.js";
+const UUID = {
+  type: "string",
+  pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+};
+const PAGE = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    limit: { type: "integer", minimum: 1, maximum: 100, default: 50 },
+    after: UUID,
+  },
+};
+const ROOM_PARAMS = {
+  type: "object",
+  additionalProperties: false,
+  required: ["id"],
+  properties: { id: UUID },
+};
 const EMPTY = { type: "object", additionalProperties: false };
 const ORIGIN = {
   type: "object",
@@ -25,6 +49,13 @@ const ROUTES = new Set([
   "POST /talk/settings/widget-key",
   "GET /ext/talk/v1/preflight",
   "OPTIONS /ext/talk/v1/preflight",
+  "GET /ext/talk/v1/widget.min.js",
+  "GET /talk/rooms",
+  "GET /talk/rooms/:id",
+  "GET /talk/rooms/:id/messages",
+  "POST /talk/rooms/:id/assign-self",
+  "POST /talk/rooms/:id/messages",
+  "POST /talk/rooms/:id/close",
 ]);
 export function createApp(options: {
   pool: Pool;
@@ -46,13 +77,21 @@ export function createApp(options: {
     logController: new LogController({ disableRequestLogging: true }),
   });
   const member = memberGate(options),
-    settings = new TalkSettings(options.pool, options.tenant);
+    settings = new TalkSettings(options.pool, options.tenant),
+    rooms = new TalkRooms(options.pool, options.tenant),
+    actors = new WeakMap<FastifyRequest, string>();
   app.addHook("onRoute", (route) => {
     if (!ROUTES.has(`${route.method} ${route.url}`))
       throw new Error("Route access must be declared.");
     if (route.url.startsWith("/talk/"))
       route.onRequest = async (request) => {
-        await member(request, "talk:write");
+        const identity = await member(
+          request,
+          route.method === "GET" && route.url.startsWith(TALK_PATHS.rooms)
+            ? "talk:read"
+            : "talk:write",
+        );
+        actors.set(request, identity.subject);
       };
     else if (route.url === TALK_PATHS.visitorPreflight)
       route.onRequest = async (request, reply) => {
@@ -135,7 +174,109 @@ export function createApp(options: {
   app.get(
     TALK_PATHS.visitorPreflight,
     { schema: { querystring: EMPTY } },
-    () => ({ allowed: true }),
+    () => ({ allowed: true, available: false }),
+  );
+  app.get(
+    TALK_PATHS.widget,
+    { schema: { querystring: EMPTY } },
+    async (request, reply) => {
+      const artifact = await widgetArtifact();
+      reply
+        .header("Content-Type", "application/javascript; charset=utf-8")
+        .header("Cache-Control", "max-age=300")
+        .header("ETag", artifact.etag);
+      if (
+        typeof request.headers["if-none-match"] === "string" &&
+        request.headers["if-none-match"]
+          .split(",")
+          .some(
+            (v) =>
+              v.trim() === "*" ||
+              v.trim().replace(/^W\//, "") === artifact.etag,
+          )
+      )
+        return reply.code(304).send();
+      return reply.send(artifact.bytes);
+    },
+  );
+  app.get<{ Querystring: { limit: number; after?: string; status?: string } }>(
+    TALK_PATHS.rooms,
+    {
+      schema: {
+        querystring: {
+          ...PAGE,
+          properties: {
+            ...PAGE.properties,
+            status: {
+              type: "string",
+              enum: ["waiting", "in_progress", "closed"],
+            },
+          },
+        },
+      },
+    },
+    (request) =>
+      rooms.list(
+        request.query.status,
+        request.query.limit,
+        request.query.after,
+      ),
+  );
+  app.get<{ Params: { id: string } }>(
+    TALK_PATHS.rooms + "/:id",
+    { schema: { params: ROOM_PARAMS, querystring: EMPTY } },
+    (request) => rooms.room(request.params.id),
+  );
+  app.get<{
+    Params: { id: string };
+    Querystring: { limit: number; after?: string };
+  }>(
+    TALK_PATHS.rooms + "/:id/messages",
+    { schema: { params: ROOM_PARAMS, querystring: PAGE } },
+    (request) =>
+      rooms.messages(
+        request.params.id,
+        request.query.limit,
+        request.query.after,
+      ),
+  );
+  app.post<{ Params: { id: string } }>(
+    TALK_PATHS.rooms + "/:id/assign-self",
+    { schema: { params: ROOM_PARAMS, querystring: EMPTY, body: EMPTY } },
+    (request) => rooms.assignSelf(request.params.id, actors.get(request)!),
+  );
+  app.post<{
+    Params: { id: string };
+    Body: { requestId: string; text: string };
+  }>(
+    TALK_PATHS.rooms + "/:id/messages",
+    {
+      schema: {
+        params: ROOM_PARAMS,
+        querystring: EMPTY,
+        body: {
+          type: "object",
+          additionalProperties: false,
+          required: ["requestId", "text"],
+          properties: {
+            requestId: UUID,
+            text: { type: "string", minLength: 1, maxLength: 4096 },
+          },
+        },
+      },
+    },
+    (request) =>
+      rooms.reply(
+        request.params.id,
+        actors.get(request)!,
+        request.body.requestId,
+        request.body.text,
+      ),
+  );
+  app.post<{ Params: { id: string } }>(
+    TALK_PATHS.rooms + "/:id/close",
+    { schema: { params: ROOM_PARAMS, querystring: EMPTY, body: EMPTY } },
+    (request) => rooms.close(request.params.id),
   );
   app.options(TALK_PATHS.visitorPreflight, async (request, reply) => {
     if (
