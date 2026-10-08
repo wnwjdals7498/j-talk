@@ -1,6 +1,6 @@
 # j-talk 기능 명세
 
-작성일: 2026-10-08. 소스 구현과 실제 검증 범위는 [제품군 진행표](../../j-groupware/docs/implementation-progress.json)를 따른다. 전체 인수는 미완료다. [목록](features.md), [결정](decisions.md), [공통 기준](../../j-groupware/docs/suite-feature-specifications.md)을 따른다. 손님 위젯은 j-talk, 회원 상담 화면은 j-groupware가 소유한다.
+작성일: 2026-10-08. 상태: **전체 인수 시험 미완료**. 소스 구현과 실제 검증 범위는 [제품군 진행표](../../j-groupware/docs/implementation-progress.json)를 따른다. [목록](features.md), [결정](decisions.md), [공통 기준](../../j-groupware/docs/suite-feature-specifications.md)을 따른다. 손님 위젯은 j-talk, 회원 상담 화면은 j-groupware가 소유한다.
 
 ## 입력·출력·상태
 
