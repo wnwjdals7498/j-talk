@@ -1,6 +1,6 @@
 # j-talk 기능 목록
 
-j-talk이 제공해야 하는 기능 목록이다. 근거는 [`decisions.md`](decisions.md)의 결정 번호와 제품군 공통 결정(`j-groupware/docs/architecture.md`의 S 번호)이고, 담당 Item은 PMT 통합 project 분류 `j-talk`이다. 모두 구현 전이다.
+j-talk이 제공해야 하는 기능 목록이다. 근거는 [`decisions.md`](decisions.md)의 결정 번호와 제품군 공통 결정(`j-groupware/docs/architecture.md`의 S 번호)이고, 담당 Item은 PMT 통합 project 분류 `j-talk`이다. 현재 소스 구현과 실행 증거는 [제품군 진행표](../../j-groupware/docs/implementation-progress.json)를 따른다. 전체 인수 완료와 구분한다.
 
 손님 화면은 이 저장소의 위젯이, 하위 회원 상담 화면은 j-groupware "상담" 메뉴(GW-35·36)가 그린다.
 

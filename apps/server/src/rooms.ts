@@ -9,7 +9,7 @@ export class TalkRooms {
   async list(status: string | undefined, limit: number, after?: string) {
     const rows = (
       await this.pool.query(
-        `SELECT id,status,assigned_member_id AS "assignedMemberId",created_at AS "createdAt" FROM rooms WHERE tenant_id=$1 AND ($2::text IS NULL OR status=$2) AND ($3::uuid IS NULL OR id>$3) ORDER BY id LIMIT $4`,
+        `SELECT r.id,r.status,r.assigned_member_id AS "assignedMemberId",r.created_at AS "createdAt",v.guest_id AS "guestId" FROM rooms r JOIN visitors v ON (v.tenant_id,v.id)=(r.tenant_id,r.visitor_id) WHERE r.tenant_id=$1 AND ($2::text IS NULL OR r.status=$2) AND ($3::uuid IS NULL OR r.id>$3) ORDER BY r.id LIMIT $4`,
         [this.tenant, status ?? null, after ?? null, limit + 1],
       )
     ).rows;

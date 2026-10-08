@@ -1,6 +1,6 @@
 # j-talk 기능 명세
 
-작성일: 2026-10-08. 상태: **구현·인수 시험 전**. [목록](features.md), [결정](decisions.md), [공통 기준](../../j-groupware/docs/suite-feature-specifications.md)을 따른다. 손님 위젯은 j-talk, 회원 상담 화면은 j-groupware가 소유한다.
+작성일: 2026-10-08. 소스 구현과 실제 검증 범위는 [제품군 진행표](../../j-groupware/docs/implementation-progress.json)를 따른다. 전체 인수는 미완료다. [목록](features.md), [결정](decisions.md), [공통 기준](../../j-groupware/docs/suite-feature-specifications.md)을 따른다. 손님 위젯은 j-talk, 회원 상담 화면은 j-groupware가 소유한다.
 
 ## 입력·출력·상태
 
@@ -16,6 +16,15 @@
 정상 흐름: 고정 스크립트 로드 → 표시 조건 3개 확인 → 방문자 token → 첫 메시지와 대기 문의방 → outbox/WSS → 회원 배정·답장·종료. 종료 후 손님 새 메시지는 새 방을 만든다. 회원이 종료된 방에 답장/배정하려 하면 409다. 담당자는 1명이지만 처리 권한은 기존 결정대로 `talk:write` 보유자다.
 
 commit 뒤 250ms 간격 outbox 폴링으로 WSS를 전달하고 cursor sync로 연결 단절 중 사건을 복구한다. 방문자 token과 회원 token, 손님 구분자 서명, WSS 연결 인증은 각각 구분한다.
+
+현재 내부 문의방 목록과 상세는 같은 tenant의 방문자 연결에서 `guestId`를
+반환한다. 손님 이름은 Talk가 다른 서비스에서 조회하지 않는다. BFF가
+`guest:read` 보유 회원에 한해 customer-auth의 기존 UUID 조회 계약으로
+`guestName`을 조합한다. 권한이 없으면 조회와 이름 필드가 없고 식별자만
+반환한다. 익명/삭제/다른 tenant 손님은 이름 null, 조회 장애나 무효 UUID는
+503이다. 목록은 중복 UUID를 합치고 동시 조회 4개와 전체 10초 한도를 둔다.
+이 연결 검증의 문의방은 실제 DB fixture로 준비했으며 방문자 발급·실시간
+전달·T2 정책·정식 상담 UI 인수를 뜻하지 않는다.
 
 ## 기능별 계약
 
