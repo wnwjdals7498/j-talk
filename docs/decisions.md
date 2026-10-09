@@ -28,11 +28,11 @@ j-talk만의 설계 결정을 적는다. 제품군 공통 결정은 [`j-groupwar
   - **방문자 토큰:**
     - 손님은 익명 방문자로 시작한다. j-talk이 불투명 랜덤 방문자 토큰을 발급하고 DB에는 해시만 저장한다. 서버에서 회수할 수 있다.
     - 위젯은 고객 사이트의 localStorage에 토큰을 두고 `Authorization` 헤더로 보낸다.
-    - 수명·회전 규칙은 T2 contracts에서 정한다.
+    - 0.2.1 계약의 수명은 30분이다. 만료 전 회전은 같은 방문자를 유지하고 이전 credential을 즉시 회수한다. 회전 경쟁에서는 하나만 성공한다. 만료·회수된 토큰은 401이며, 위젯은 새 credential을 발급받는다. 익명 방문자는 만료 후 이전 대화를 다시 찾을 식별 근거가 없다.
   - **손님 구분자 (사용자):**
     - 고객 사이트가 손님을 알면 위젯 속성으로 구분자를 넘긴다.
     - j-talk은 서명을 확인한 뒤 그 방문자의 문의방을 해당 손님(j-customer-auth-db 손님 id) 앞으로 저장한다.
-    - 이미 그 손님 앞으로 된 진행 중 문의방이 있으면 거기에 잇는다.
+    - 새 credential 발급 시 같은 tenant의 검증된 guestId에 연결된 최초 방문자를 잠금 아래 선택해 기존 열린 방에 잇는다. 이미 발급된 익명/다른 손님 credential의 소유자는 새 서명으로 덮어쓰지 않는다. 종료 후에는 새 방을 만든다.
   - **서명 형식 (S7):**
     - 속성은 `data-guest-id`, `data-guest-exp`(유닉스 초), `data-guest-sig`다.
     - `data-guest-sig` = HMAC-SHA256(위젯 비밀키, `tenant|guestId|exp`)을 base64url로 쓴 값이다.
@@ -82,6 +82,9 @@ j-talk만의 설계 결정을 적는다. 제품군 공통 결정은 [`j-groupwar
   - j-messenger처럼 쓰기 트랜잭션 안에서 메시지·dedup·`event_outbox`를 함께 기록한다.
   - commit 후 250ms 간격으로 outbox를 폴링해 WSS로 보낸다.
   - 재연결 복구는 j-messenger의 서명 cursor + sync API를 줄여서 쓴다.
+  - 0.2.1 cursor는 tenant와 방문자 또는 회원 subject/sid, 위치, 5분 만료를 HMAC으로 묶는다. 한 페이지는 100개다. tenant별 outbox 삽입 transaction을 직렬화하고 잠금 획득 후 sequence를 매겨, 아직 commit되지 않은 사건을 cursor가 건너뛰지 않는다.
+  - 방문자 WSS는 허용 Origin과 연결 후 5초 이내 첫 `authenticate` frame의 credential을 함께 확인한다. 토큰은 URL에 넣지 않는다. 회원 WSS는 BFF가 Bearer를 붙이고 현재 회원 세션·권한을 검사한다. 방문자 credential/Origin 회수와 회원 권한 회수는 기존 연결에도 적용한다.
+  - 위젯은 단절 후 HTTP sync와 WSS를 다시 연결하고 사건 UUID로 중복 표시를 막는다. 64 KiB 전송 대기, 방문자당 연결 4개와 프로세스 연결 1000개 한도를 둔다. 이것은 고객 VM의 네트워크 수신 SLA나 운영 인수 완료를 뜻하지 않는다.
 - **이유:** j-messenger 코드를 옮길 수 있고 연결이 끊겨도 이벤트가 유실되지 않는다. LISTEN/NOTIFY는 backlog다.
 
 ### 결정 7. 하위 회원 API·실시간 경로

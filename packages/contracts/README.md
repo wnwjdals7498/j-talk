@@ -1,5 +1,18 @@
 # @j-talk/contracts
 
+0.2.1 adds the visitor HTTP/WSS subset and supersedes the historical gates below.
+Credentials are opaque, hash-only at rest and expire after 30 minutes. Valid
+rotation keeps the visitor; a fresh verified guest credential selects the guest's
+canonical visitor without rebinding an existing anonymous credential. WSS requires
+the exact registered Origin and an authentication frame within five seconds;
+tokens never appear in URLs. Sync cursors expire after five minutes and bind to
+the tenant and visitor or member/session. Message/outbox commit ordering is
+serialized per tenant. Plain text stays within 4096 UTF-8 bytes and a visitor may
+submit twenty new messages per minute. The browser BFF checks current session
+roles and closes member WSS on revocation. A reply HTTP acknowledgement still
+reports `pending`; observing WSS delivery is a separate action. Customer VM and
+operational notification routing acceptance remain unexecuted.
+
 0.1.2 publishes the established member HTTP and management subset: tenant-scoped
 room states/list/detail, UUID pagination, self assignment and its occurrence ID,
 plain-text replies (4096 UTF-8 bytes), close, allowed-origin management, one-time

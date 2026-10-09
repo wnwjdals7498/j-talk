@@ -33,7 +33,7 @@ commit 뒤 250ms 간격 outbox 폴링으로 WSS를 전달하고 cursor sync로 �
 | TK-01 | T6 | Vite library→CSS 포함 widget.min.js 1개·고정 v1 주소 | max-age=300·ETag·압축 30KB 이하의 측정 조건 고정 | TK-T01 |
 | TK-02 | T6 | script 로드·FAB 클릭→Shadow DOM 대화창 | host CSS와 독립·메시지 텍스트 렌더링 | TK-T01 |
 | TK-03 | T6 | 동작/출처/가입 확인→모두 참이면 표시 | 미가입 빈 script·출처 불허/장애면 버튼 없음 | TK-T01 |
-| TK-04 | T6 | localStorage token→HTTP Authorization | 회수/만료 token 재발급 정책 T2, 원문 로그 없음 | TK-T02 |
+| TK-04 | T6 | 출처별 localStorage token→HTTP Authorization | 30분 수명·만료 전 같은 방문자로 회전·회수/만료 401 후 새 발급, 원문 로그 없음 | TK-T02 |
 | TK-05 | T6 | data-guest-id/exp/sig→손님 구분자 입력 | 위젯에서 비밀키 생성/보관 안 함 | TK-T02 |
 | TK-06 | T6 | WSS 수신·재연결→서명 cursor sync | 단절 중 누락 복구·같은 사건 중복 표시 방지 | TK-T04 |
 | TK-07 | T6 | 제한 응답 429→기다린 뒤 다시 보내기 안내 | 보내지 않은 메시지를 성공 표시하지 않음 | TK-T03 |
@@ -53,7 +53,7 @@ commit 뒤 250ms 간격 outbox 폴링으로 WSS를 전달하고 cursor sync로 �
 | TK-27 | T4 | 회원 Bearer/visitor 검증→tenant별 접근 | 401·403·404·409·429·503 구별 | TK-T02·TK-T03 |
 | TK-30 | T9 | 방 생성/배정→outbox→talk.new/assigned | 발생 사건별 dedupKey·반복 배정 사건 구별 | TK-T05 |
 | TK-40 | T1 | server/widget/contracts·jgw_talk·migration | 전용 DB·tenant 필수·비밀키 백업 보호 | TK-T06 |
-| TK-41 | T2 | HTTP/WSS/관리·token/서명/cursor 계약 게시 | 브라우저 WSS 인증·수명·회전 미정 관문 | TK-T06 |
+| TK-41 | T2 | 0.2.1 HTTP/WSS/관리·token/서명/cursor 계약 게시 | 5초 첫 frame·30분 credential·5분 tenant/주체 cursor·UTF-8 4096바이트 | TK-T06 |
 | TK-42 | T8 | VM 위젯→상담 화면→설치/해지 | /ext만 외부 노출·해지 후 위젯 200 빈 응답·VM T7 | TK-T06 |
 
 ## 인수 시험
@@ -69,6 +69,6 @@ commit 뒤 250ms 간격 outbox 폴링으로 WSS를 전달하고 cursor sync로 �
 
 ## 확정 관문
 
-T2에서 방문자 token 수명·회전·회수, 브라우저 WSS 인증 전송 방식, Origin 정규화, guestId 재연결/여러 방 충돌, 메시지 중복 id·cursor·본문 단위·DTO를 고정한다. HTTP Authorization 규칙을 브라우저 WSS에 그대로 적용할 수 있다고 가정하지 않는다. 이미 다른 손님에 연결된 token을 새 서명만으로 덮어써 이전 대화를 노출하지 않도록 연결 정책을 시험한다.
+0.2.1의 T2 계약은 [검증 기록](cloud-visitor-transport-verification-2026-10-09.md)과 결정 2·6에 고정했다. 방문자 HTTP는 Authorization, WSS는 첫 인증 frame을 사용한다. 동일 UUID/본문 재시도는 rate limit에 다시 차감하지 않고 기존 메시지를 반환한다. cursor는 tenant·방문자 또는 회원 subject/sid에 묶이며 변조·범위 오류는 400이다. 새로 검증된 손님 credential만 같은 손님 열린 방에 합류하며 기존 credential의 소유자를 바꾸지 않는다. 실제 고객 VM TK-T06과 정식 상담 UI 전체 인수는 별도 미실행이다.
 
 `dedupKey=방id:사건`의 사건은 종류 문자열이 아니라 실제 발생의 안정된 식별자다. 첨부·자동 배정·재개·다중 담당·보존 정책·캡차·LISTEN/NOTIFY는 이후 범위다.

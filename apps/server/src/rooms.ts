@@ -48,7 +48,7 @@ export class TalkRooms {
       );
     const rows = (
       await this.pool.query(
-        `SELECT id,text,sender_member_id AS "senderMemberId",created_at AS "createdAt" FROM messages WHERE tenant_id=$1 AND room_id=$2 AND ($3::uuid IS NULL OR sequence>(SELECT sequence FROM messages WHERE tenant_id=$1 AND room_id=$2 AND id=$3)) ORDER BY sequence LIMIT $4`,
+        `SELECT id,text,sender_member_id AS "senderMemberId",sender_visitor_id AS "senderVisitorId",created_at AS "createdAt" FROM messages WHERE tenant_id=$1 AND room_id=$2 AND ($3::uuid IS NULL OR sequence>(SELECT sequence FROM messages WHERE tenant_id=$1 AND room_id=$2 AND id=$3)) ORDER BY sequence LIMIT $4`,
         [this.tenant, id, after ?? null, limit + 1],
       )
     ).rows;
@@ -172,6 +172,10 @@ export class TalkRooms {
       await client.query(
         "UPDATE rooms SET status='closed',closed_at=now() WHERE tenant_id=$1 AND id=$2",
         [this.tenant, id],
+      );
+      await client.query(
+        "INSERT INTO event_outbox(tenant_id,id,room_id,type) VALUES($1,$2,$3,'talk.closed')",
+        [this.tenant, randomUUID(), id],
       );
       return { id, status: "closed" };
     });

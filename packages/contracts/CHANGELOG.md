@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.1 — 2026-10-09
+
+Document the implemented visitor/WSS/sync behavior and remaining acceptance
+boundaries. Preserve preliminary 0.2.0 immutable; consumers use 0.2.1 exactly.
+
+## 0.2.0 — 2026-10-09
+
+Add short opaque visitor credentials, verified guest issuance, visitor messages,
+realtime event and signed cursor sync DTOs. Message senders have exactly one
+member or visitor identifier. Preserve earlier immutable member-only versions.
+
 ## 0.1.2 — 2026-10-09
 
 Canonical formatted build of the 0.1.1 addition. The earlier registry version is

@@ -93,11 +93,12 @@ describe("actual member room storage and built widget", () => {
       55045,
       { Origin: "https://widget.example.test" },
     );
-    expect(await pre.json()).toEqual({ allowed: true, available: false });
+    expect(await pre.json()).toEqual({ allowed: true, available: true });
     let domWrites = 0;
     runInNewContext(bytes.toString(), {
       document: {
         currentScript: {
+          dataset: {},
           src: "https://gw.fixture.jgw.test/ext/talk/v1/widget.min.js",
         },
         createElement: () => {
@@ -106,6 +107,7 @@ describe("actual member room storage and built widget", () => {
         },
       },
       URL,
+      AbortSignal,
       fetch: async () => ({
         ok: true,
         json: async () => ({ allowed: true, available: false }),

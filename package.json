@@ -22,6 +22,8 @@
     "test:registry": "node --test tests/registry/contracts.test.mjs"
   },
   "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "@types/ws": "8.18.2",
     "@types/node": "22.20.4",
     "@types/pg": "8.23.1",
     "eslint": "10.11.0",

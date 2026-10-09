@@ -23,8 +23,7 @@ export interface GuestSignature {
   exp: number;
   sig: string;
 }
-// Only established member HTTP and settings contracts are published here.
-// Visitor issuance, browser WSS authentication and signed sync cursors remain T2.
+// Public visitor credentials are distinct from Keycloak member Bearer tokens.
 export const TALK_ROOM_STATUSES = ["waiting", "in_progress", "closed"] as const;
 export type TalkRoomStatus = (typeof TALK_ROOM_STATUSES)[number];
 export interface TalkRoom {
@@ -43,7 +42,8 @@ export interface TalkPage<T> {
 export interface TalkMessage {
   id: string;
   text: string;
-  senderMemberId: string;
+  senderMemberId: string | null;
+  senderVisitorId: string | null;
   createdAt: string;
 }
 export interface TalkReplyRequest {
@@ -141,4 +141,46 @@ export function talkNotificationDedupKey(roomId: string, occurrenceId: string) {
   )
     throw new Error("Room and occurrence UUIDs required.");
   return roomId + ":" + occurrenceId;
+}
+export const TALK_VISITOR_PATHS = {
+  tokens: "/ext/talk/v1/tokens",
+  session: "/ext/talk/v1/session",
+  messages: "/ext/talk/v1/messages",
+  sync: "/ext/talk/v1/sync",
+  websocket: "/ext/talk/v1/ws",
+} as const;
+export const TALK_VISITOR_POLICY = {
+  tokenSeconds: 1800,
+  cursorSeconds: 300,
+  issuePerMinute: 10,
+  messagesPerMinute: 20,
+  textBytes: 4096,
+  authenticationSeconds: 5,
+  pollMilliseconds: 250,
+  page: 100,
+} as const;
+export interface TalkVisitorToken {
+  token: string;
+  expiresAt: string;
+}
+export interface TalkVisitorSession {
+  guestId: string | null;
+  room: TalkRoom | null;
+  expiresAt: string;
+}
+export type TalkVisitorMessageRequest = TalkReplyRequest;
+export interface TalkVisitorMessageResult {
+  id: string;
+  roomId: string;
+}
+export interface TalkEvent {
+  id: string;
+  roomId: string;
+  type: "talk.new" | "talk.assigned" | "talk.message" | "talk.closed";
+  message: TalkMessage | null;
+}
+export interface TalkSync {
+  items: TalkEvent[];
+  cursor: string;
+  hasMore: boolean;
 }

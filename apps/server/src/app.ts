@@ -21,6 +21,9 @@ import { TalkSettings } from "./settings.js";
 import { TalkRooms } from "./rooms.js";
 import { widgetArtifact } from "./widget.js";
 import { assignmentVerifier } from "./assignment.js";
+import { TalkVisitors } from "./visitors.js";
+import { TalkStream } from "./stream.js";
+import { registerTalkTransport } from "./transport.js";
 const {
   page: PAGE,
   roomParams: ROOM_PARAMS,
@@ -50,6 +53,20 @@ const ROUTES = new Set([
   "POST /talk/rooms/:id/assign",
   "POST /talk/rooms/:id/messages",
   "POST /talk/rooms/:id/close",
+  "POST /ext/talk/v1/tokens",
+  "POST /ext/talk/v1/tokens/rotate",
+  "GET /ext/talk/v1/session",
+  "POST /ext/talk/v1/messages",
+  "GET /ext/talk/v1/sync",
+  "GET /ext/talk/v1/ws",
+  "OPTIONS /ext/talk/v1/tokens",
+  "OPTIONS /ext/talk/v1/tokens/rotate",
+  "OPTIONS /ext/talk/v1/session",
+  "OPTIONS /ext/talk/v1/messages",
+  "OPTIONS /ext/talk/v1/sync",
+  "POST /talk/visitors/:id/revoke",
+  "GET /talk/sync",
+  "GET /talk/ws",
 ]);
 export function createApp(options: {
   pool: Pool;
@@ -83,13 +100,16 @@ export function createApp(options: {
       route.onRequest = async (request) => {
         const identity = await member(
           request,
-          route.method === "GET" && route.url.startsWith(TALK_PATHS.rooms)
+          route.method === "GET" && !route.url.startsWith("/talk/settings/")
             ? "talk:read"
             : "talk:write",
         );
         actors.set(request, identity);
       };
-    else if (route.url === TALK_PATHS.visitorPreflight)
+    else if (
+      route.url.startsWith("/ext/talk/") &&
+      route.url !== TALK_PATHS.widget
+    )
       route.onRequest = async (request, reply) => {
         const origin = await settings.requireOrigin(request.headers.origin);
         reply
@@ -170,7 +190,7 @@ export function createApp(options: {
   app.get(
     TALK_PATHS.visitorPreflight,
     { schema: { querystring: EMPTY } },
-    () => ({ allowed: true, available: false }),
+    () => ({ allowed: true, available: true }),
   );
   app.get(
     TALK_PATHS.widget,
@@ -301,5 +321,12 @@ export function createApp(options: {
       .code(204)
       .send();
   });
+  registerTalkTransport(
+    app,
+    new TalkVisitors(options.pool, options.tenant, settings),
+    settings,
+    new TalkStream(options.pool, options.tenant),
+    (request) => actors.get(request)!,
+  );
   return app;
 }

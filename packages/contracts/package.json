@@ -1,8 +1,8 @@
 {
   "name": "@j-talk/contracts",
-  "version": "0.1.2",
+  "version": "0.2.1",
   "type": "module",
-  "description": "talk member management foundation contracts (visitor/hosting lifecycle excluded)",
+  "description": "talk member and opaque visitor token, message and signed cursor transport contracts",
   "files": [
     "dist",
     "README.md",

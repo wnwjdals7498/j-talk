@@ -181,6 +181,13 @@ export async function integrationRuntime() {
         await pool.query("DELETE FROM messages WHERE tenant_id=$1", [f.tenant]);
         await pool.query("DELETE FROM rooms WHERE tenant_id=$1", [f.tenant]);
         await pool.query("DELETE FROM visitors WHERE tenant_id=$1", [f.tenant]);
+        await pool.query("DELETE FROM visitor_rate_limits WHERE tenant_id=$1", [
+          f.tenant,
+        ]);
+        await pool.query(
+          "DELETE FROM realtime_cursor_keys WHERE tenant_id=$1",
+          [f.tenant],
+        );
         await pool.query("DELETE FROM allowed_origins WHERE tenant_id=$1", [
           f.tenant,
         ]);
