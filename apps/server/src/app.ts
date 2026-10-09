@@ -8,31 +8,21 @@ import type { ServerOptions as HttpsOptions } from "node:https";
 import type { Pool } from "pg";
 import type { TokenVerifier } from "@j-auth/token-verifier";
 import { assertCustomerTenantId } from "@j-auth/contracts";
-import { TALK_PATHS } from "@j-talk/contracts";
+import {
+  TALK_PATHS,
+  TALK_MEMBER_SCHEMAS,
+  TALK_ROOM_STATUSES,
+} from "@j-talk/contracts";
 import { ApiError, unavailable } from "./errors.js";
 import { memberGate } from "./auth.js";
 import { TalkSettings } from "./settings.js";
 import { TalkRooms } from "./rooms.js";
 import { widgetArtifact } from "./widget.js";
-const UUID = {
-  type: "string",
-  pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
-};
-const PAGE = {
-  type: "object",
-  additionalProperties: false,
-  properties: {
-    limit: { type: "integer", minimum: 1, maximum: 100, default: 50 },
-    after: UUID,
-  },
-};
-const ROOM_PARAMS = {
-  type: "object",
-  additionalProperties: false,
-  required: ["id"],
-  properties: { id: UUID },
-};
-const EMPTY = { type: "object", additionalProperties: false };
+const {
+  page: PAGE,
+  roomParams: ROOM_PARAMS,
+  empty: EMPTY,
+} = TALK_MEMBER_SCHEMAS;
 const ORIGIN = {
   type: "object",
   additionalProperties: false,
@@ -209,7 +199,7 @@ export function createApp(options: {
             ...PAGE.properties,
             status: {
               type: "string",
-              enum: ["waiting", "in_progress", "closed"],
+              enum: TALK_ROOM_STATUSES,
             },
           },
         },
@@ -254,15 +244,7 @@ export function createApp(options: {
       schema: {
         params: ROOM_PARAMS,
         querystring: EMPTY,
-        body: {
-          type: "object",
-          additionalProperties: false,
-          required: ["requestId", "text"],
-          properties: {
-            requestId: UUID,
-            text: { type: "string", minLength: 1, maxLength: 4096 },
-          },
-        },
+        body: TALK_MEMBER_SCHEMAS.reply,
       },
     },
     (request) =>

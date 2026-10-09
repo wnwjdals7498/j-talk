@@ -1,6 +1,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { PoolConfig } from "pg";
+import { notificationEndpoint } from "./notification-sender.js";
 import { assertCustomerTenantId } from "@j-auth/contracts";
 
 const repository = fileURLToPath(new URL("../../../", import.meta.url));
@@ -67,5 +68,22 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
     tlsCertificate: externalFile(required(env, "JT_TLS_CERTIFICATE")),
     tlsKey: externalFile(required(env, "JT_TLS_KEY")),
     database: loadDatabaseConfig(env),
+    ...(env.JT_NOTIFICATION_URL || env.JT_NOTIFICATION_KEY
+      ? {
+          notification: {
+            url: (() => {
+              const value = required(env, "JT_NOTIFICATION_URL");
+              notificationEndpoint(value);
+              return value;
+            })(),
+            key: (() => {
+              const value = required(env, "JT_NOTIFICATION_KEY");
+              if (!/^[A-Za-z0-9_-]{20,128}$/.test(value))
+                throw new Error("Private notification key required.");
+              return value;
+            })(),
+          },
+        }
+      : {}),
   };
 }

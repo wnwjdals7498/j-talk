@@ -247,7 +247,7 @@ describe("actual member room storage and built widget", () => {
     ).toBe(400);
     const counts = (
       await r.pool.query(
-        "SELECT (SELECT count(*) FROM messages WHERE tenant_id=$1 AND room_id=$2)::int AS messages,(SELECT count(*) FROM event_outbox WHERE tenant_id=$1 AND room_id=$2)::int AS events",
+        "SELECT (SELECT count(*) FROM messages WHERE tenant_id=$1 AND room_id=$2)::int AS messages,(SELECT count(*) FROM event_outbox WHERE tenant_id=$1 AND room_id=$2 AND type='talk.message')::int AS events",
         [r.fixtures[0]!.tenant, id],
       )
     ).rows[0];

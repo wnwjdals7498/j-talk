@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
 import { ApiError, missing } from "./errors.js";
+import { TALK_MEMBER_LIMITS } from "@j-talk/contracts";
+import type { TalkAssignmentResult } from "@j-talk/contracts";
 export class TalkRooms {
   constructor(
     private pool: Pool,
@@ -87,11 +89,21 @@ export class TalkRooms {
         "UPDATE rooms SET assigned_member_id=$3,status='in_progress' WHERE tenant_id=$1 AND id=$2",
         [this.tenant, id, member],
       );
-      return { id, status: "in_progress", assignedMemberId: member };
+      const occurrenceId = randomUUID();
+      await client.query(
+        "INSERT INTO event_outbox(tenant_id,id,room_id,type,recipient_member_id) VALUES ($1,$2,$3,'talk.assigned',$4)",
+        [this.tenant, occurrenceId, id, member],
+      );
+      return {
+        id,
+        status: "in_progress",
+        assignedMemberId: member,
+        occurrenceId,
+      } satisfies TalkAssignmentResult;
     });
   }
   async reply(id: string, member: string, requestId: string, text: string) {
-    if (!text.trim() || Buffer.byteLength(text) > 4096)
+    if (!text.trim() || Buffer.byteLength(text) > TALK_MEMBER_LIMITS.textBytes)
       throw new ApiError(
         400,
         "invalid_input",

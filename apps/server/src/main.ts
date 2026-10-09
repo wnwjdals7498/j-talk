@@ -3,6 +3,7 @@ import { createDatabasePool } from "./db/pool.js";
 import { loadConfig } from "./config.js";
 import { migrate } from "./db/migrate.js";
 import { createApp } from "./app.js";
+import { NotificationSender } from "./notification-sender.js";
 async function main() {
   const config = loadConfig(),
     pool = createDatabasePool(config.database);
@@ -29,6 +30,18 @@ async function main() {
     });
     app.addHook("onClose", () => pool.end());
     cleanup = () => app.close();
+    if (config.notification) {
+      const sender = new NotificationSender(
+        pool,
+        config.tenant,
+        config.notification.url,
+        config.notification.key,
+      );
+      app.addHook("onReady", async () => {
+        sender.start();
+      });
+      app.addHook("preClose", () => sender.stop());
+    }
     let closing = false;
     for (const signal of ["SIGINT", "SIGTERM"])
       process.once(signal, () => {

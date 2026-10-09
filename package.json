@@ -18,7 +18,8 @@
     "test:integration": "npm run build && node scripts/run-integration.mjs",
     "lint": "eslint apps packages tests scripts",
     "format:check": "prettier --check apps packages tests scripts *.config.ts eslint.config.mjs",
-    "start": "node apps/server/dist/main.js"
+    "start": "node apps/server/dist/main.js",
+    "test:registry": "node --test tests/registry/contracts.test.mjs"
   },
   "devDependencies": {
     "@types/node": "22.20.4",
