@@ -68,6 +68,16 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
     tlsCertificate: externalFile(required(env, "JT_TLS_CERTIFICATE")),
     tlsKey: externalFile(required(env, "JT_TLS_KEY")),
     database: loadDatabaseConfig(env),
+    ...(env.JT_ASSIGNMENT_KEY !== undefined
+      ? {
+          assignmentKey: (() => {
+            const value = required(env, "JT_ASSIGNMENT_KEY");
+            if (!/^[A-Za-z0-9_-]{43}$/.test(value))
+              throw new Error("Private assignment binding required.");
+            return value;
+          })(),
+        }
+      : {}),
     ...(env.JT_NOTIFICATION_URL || env.JT_NOTIFICATION_KEY
       ? {
           notification: {

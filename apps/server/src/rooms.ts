@@ -84,7 +84,31 @@ export class TalkRooms {
     }
   }
   async assignSelf(id: string, member: string) {
+    return this.assign(id, member);
+  }
+  async assign(
+    id: string,
+    member: string,
+    receipt?: { nonce: string; expiresAt: Date },
+  ) {
     return this.mutate(id, async (client) => {
+      if (receipt) {
+        // Consume in the same transaction as room/outbox changes. A failed mutation can retry.
+        await client.query(
+          "DELETE FROM assignment_receipts WHERE tenant_id=$1 AND expires_at<=clock_timestamp()",
+          [this.tenant],
+        );
+        const consumed = await client.query(
+          "INSERT INTO assignment_receipts(tenant_id,nonce,expires_at) SELECT $1,$2,$3 WHERE $3::timestamptz>clock_timestamp() ON CONFLICT DO NOTHING RETURNING nonce",
+          [this.tenant, receipt.nonce, receipt.expiresAt],
+        );
+        if (!consumed.rowCount)
+          throw new ApiError(
+            409,
+            "assignment_expired_or_used",
+            "Assignment authorization expired or was used.",
+          );
+      }
       await client.query(
         "UPDATE rooms SET assigned_member_id=$3,status='in_progress' WHERE tenant_id=$1 AND id=$2",
         [this.tenant, id, member],

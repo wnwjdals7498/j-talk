@@ -60,6 +60,23 @@ export interface TalkAssignmentResult {
   assignedMemberId: string;
   occurrenceId: string;
 }
+export interface TalkAssignee {
+  id: string;
+  username: string;
+}
+export interface TalkAssigneePage {
+  items: TalkAssignee[];
+  nextCursor: string | null;
+}
+export interface TalkAssignRequest {
+  memberId: string;
+}
+// Internal BFF-to-Talk envelope. The browser receives neither this proof nor its key.
+export interface TalkTrustedAssignment extends TalkAssignRequest {
+  authorization: string;
+}
+export const TALK_ASSIGNMENT_TTL_SECONDS = 10;
+export const TALK_ASSIGNMENT_KEY_CONTEXT = "jgw-talk-assignment-v1:";
 export interface TalkCloseResult {
   id: string;
   status: "closed";
@@ -92,6 +109,28 @@ export const TALK_MEMBER_SCHEMAS = {
     properties: {
       requestId: uuid,
       text: { type: "string", minLength: 1, maxLength: 4096 },
+    },
+  },
+  assign: {
+    type: "object",
+    additionalProperties: false,
+    required: ["memberId"],
+    properties: { memberId: uuid },
+  },
+  trustedAssignment: {
+    type: "object",
+    additionalProperties: false,
+    required: ["memberId", "authorization"],
+    properties: {
+      memberId: uuid,
+      authorization: { type: "string", minLength: 1, maxLength: 2048 },
+    },
+  },
+  assignees: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      cursor: { type: "string", pattern: "^(0|[1-9][0-9]{0,5})$" },
     },
   },
 } as const;

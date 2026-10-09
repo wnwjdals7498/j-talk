@@ -18,6 +18,7 @@ async function main() {
       pool,
       tenant: config.tenant,
       keycloakOrigin: config.keycloakOrigin,
+      ...(config.assignmentKey ? { assignmentKey: config.assignmentKey } : {}),
       https: { cert, key, minVersion: "TLSv1.2" },
       logger: {
         level: "info",

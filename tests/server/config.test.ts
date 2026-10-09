@@ -31,6 +31,13 @@ describe("dedicated external configuration", () => {
       JT_TLS_KEY: "/workspace/.suite-runtime/j-talk/server.key",
     };
     expect(loadConfig(env)).not.toHaveProperty("notification");
+    expect(loadConfig(env)).not.toHaveProperty("assignmentKey");
+    expect(() =>
+      loadConfig({ ...env, JT_ASSIGNMENT_KEY: "bad key" }),
+    ).toThrow();
+    expect(
+      loadConfig({ ...env, JT_ASSIGNMENT_KEY: "x".repeat(43) }).assignmentKey,
+    ).toBe("x".repeat(43));
     for (const value of [
       "https://external.jgw.test:443",
       "http://127.0.0.1:3001",

@@ -44,7 +44,7 @@ commit 뒤 250ms 간격 outbox 폴링으로 WSS를 전달하고 cursor sync로 �
 | TK-13 | T4 | CORS/WSS Origin→허용 목록 비교 | 미등록 403, 출처 허용만으로 방문자 인증 대체 불가 | TK-T02 |
 | TK-14 | T5 | 메시지→분당 20개·최대 4KB·열린 방 1개 검사 | 제한 초과 429·HTML 미수락, 바이트 단위 T2 고정 | TK-T03 |
 | TK-20 | T5 | 상태/페이지/방 id→문의방·대화·guestId | talk:read, 같은 tenant 전체·다른 tenant 404 | TK-T03 |
-| TK-21 | T5 | 방 id/담당 회원→배정·재배정→진행 | talk:write, 담당 1명·종료된 방 409 | TK-T03 |
+| TK-21 | T5 | 방 id/같은 tenant 활성 talk:write 담당 후보→수동 배정·재배정→진행 | 요청자 현재 talk:write, 최소 id/username 후보, BFF 10초 서명·nonce transaction, 담당 1명·종료된 방 409 | TK-T03 |
 | TK-22 | T5 | 회원 답장→메시지/outbox→손님 수신 | talk:write, 현재 방 상태·tenant 검사 | TK-T03·TK-T04 |
 | TK-23 | T5 | 종료 요청→종료 상태 | talk:write, 이후 변경 409·새 문의는 새 방 | TK-T03 |
 | TK-24 | T5 | outbox→WSS·cursor sync→누락 사건 | talk:read·방 소유/tenant·cursor 서명 범위 검사 | TK-T04 |

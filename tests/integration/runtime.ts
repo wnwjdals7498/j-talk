@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
-import { randomBytes, randomUUID } from "node:crypto";
+import { createHmac, randomBytes, randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { lookup } from "node:dns";
 import { Agent, fetch as undiciFetch } from "undici";
@@ -175,6 +175,9 @@ export async function integrationRuntime() {
         await pool.query("DELETE FROM event_outbox WHERE tenant_id=$1", [
           f.tenant,
         ]);
+        await pool.query("DELETE FROM assignment_receipts WHERE tenant_id=$1", [
+          f.tenant,
+        ]);
         await pool.query("DELETE FROM messages WHERE tenant_id=$1", [f.tenant]);
         await pool.query("DELETE FROM rooms WHERE tenant_id=$1", [f.tenant]);
         await pool.query("DELETE FROM visitors WHERE tenant_id=$1", [f.tenant]);
@@ -210,6 +213,15 @@ export async function integrationRuntime() {
       pool,
       tenant,
       keycloakOrigin: required("KC_PUBLIC_URL"),
+      assignmentKey: createHmac(
+        "sha256",
+        Buffer.from(
+          fixtures.find((f) => f.tenant === tenant)!.serviceKey,
+          "base64url",
+        ),
+      )
+        .update("jgw-talk-assignment-v1:" + tenant)
+        .digest("base64url"),
       fetch,
       https: { cert, key },
       ...overrides,

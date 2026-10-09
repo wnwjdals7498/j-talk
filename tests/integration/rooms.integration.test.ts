@@ -1,5 +1,6 @@
 import { beforeAll, afterAll, describe, it, expect } from "vitest";
-import { randomUUID } from "node:crypto";
+import { createHmac, randomUUID } from "node:crypto";
+import { decodeJwt } from "jose";
 import { readFile, readdir } from "node:fs/promises";
 import { gzipSync } from "node:zlib";
 import { runInNewContext } from "node:vm";
@@ -192,6 +193,88 @@ describe("actual member room storage and built widget", () => {
       status: "in_progress",
       assignedMemberId: r.actors[0]!.id,
     });
+  });
+  it("consumes genuine trusted assignments atomically and rejects tampering, cross-room/session/tenant binding and replay", async () => {
+    const key = createHmac(
+      "sha256",
+      Buffer.from(r.fixtures[0]!.serviceKey, "base64url"),
+    )
+      .update("jgw-talk-assignment-v1:" + r.fixtures[0]!.tenant)
+      .digest();
+    const sign = (changes: Record<string, unknown> = {}) => {
+      const iat = Math.floor(Date.now() / 1000),
+        nonce = randomUUID();
+      const payload = Buffer.from(
+        JSON.stringify({
+          v: 1,
+          tenant: r.fixtures[0]!.tenant,
+          room: id,
+          member: r.actors[0]!.id,
+          actor: r.actors[0]!.id,
+          sid: decodeJwt(r.actors[0]!.token).sid,
+          iat,
+          exp: iat + 10,
+          nonce,
+          ...changes,
+        }),
+      ).toString("base64url");
+      return {
+        nonce,
+        authorization:
+          payload +
+          "." +
+          createHmac("sha256", key).update(payload).digest("base64url"),
+      };
+    };
+    const path = `/talk/rooms/${id}/assign`,
+      memberId = r.actors[0]!.id;
+    expect((await request(path, "POST", { memberId })).status).toBe(400);
+    for (const changes of [
+      { tenant: r.fixtures[1]!.tenant },
+      { room: randomUUID() },
+      { sid: "another-session" },
+      { actor: randomUUID() },
+      { member: randomUUID() },
+      { iat: 1, exp: 11 },
+    ])
+      expect(
+        (
+          await request(path, "POST", {
+            memberId,
+            authorization: sign(changes).authorization,
+          })
+        ).status,
+      ).toBe(403);
+    expect(
+      (await request(path, "POST", { memberId, authorization: "forgery" }))
+        .status,
+    ).toBe(403);
+    const proof = sign();
+    const results = await Promise.all(
+      Array.from({ length: 3 }, () =>
+        request(path, "POST", { memberId, authorization: proof.authorization }),
+      ),
+    );
+    expect(results.map((x) => x.status).sort()).toEqual([200, 409, 409]);
+    const result = (await results.find((x) => x.status === 200)!.json()) as {
+      occurrenceId: string;
+    };
+    expect(
+      (
+        await r.pool.query(
+          "SELECT count(*)::int AS count FROM assignment_receipts WHERE tenant_id=$1 AND nonce=$2",
+          [r.fixtures[0]!.tenant, proof.nonce],
+        )
+      ).rows[0].count,
+    ).toBe(1);
+    expect(
+      (
+        await r.pool.query(
+          "SELECT recipient_member_id FROM event_outbox WHERE tenant_id=$1 AND id=$2",
+          [r.fixtures[0]!.tenant, result.occurrenceId],
+        )
+      ).rows[0].recipient_member_id,
+    ).toBe(memberId);
   });
   it("commits member text and one outbox row atomically, deduplicates, paginates in commit order and bounds UTF-8 bytes", async () => {
     const key = randomUUID(),

@@ -7,6 +7,8 @@ import type {
 import type { ServerOptions as HttpsOptions } from "node:https";
 import type { Pool } from "pg";
 import type { TokenVerifier } from "@j-auth/token-verifier";
+import type { VerifiedIdentity } from "@j-auth/token-verifier";
+import type { TalkTrustedAssignment } from "@j-talk/contracts";
 import { assertCustomerTenantId } from "@j-auth/contracts";
 import {
   TALK_PATHS,
@@ -18,6 +20,7 @@ import { memberGate } from "./auth.js";
 import { TalkSettings } from "./settings.js";
 import { TalkRooms } from "./rooms.js";
 import { widgetArtifact } from "./widget.js";
+import { assignmentVerifier } from "./assignment.js";
 const {
   page: PAGE,
   roomParams: ROOM_PARAMS,
@@ -44,6 +47,7 @@ const ROUTES = new Set([
   "GET /talk/rooms/:id",
   "GET /talk/rooms/:id/messages",
   "POST /talk/rooms/:id/assign-self",
+  "POST /talk/rooms/:id/assign",
   "POST /talk/rooms/:id/messages",
   "POST /talk/rooms/:id/close",
 ]);
@@ -55,6 +59,7 @@ export function createApp(options: {
   fetch?: typeof globalThis.fetch;
   https?: HttpsOptions;
   logger?: FastifyServerOptions["logger"];
+  assignmentKey?: string;
 }) {
   assertCustomerTenantId(options.tenant);
   const app = Fastify({
@@ -69,7 +74,8 @@ export function createApp(options: {
   const member = memberGate(options),
     settings = new TalkSettings(options.pool, options.tenant),
     rooms = new TalkRooms(options.pool, options.tenant),
-    actors = new WeakMap<FastifyRequest, string>();
+    actors = new WeakMap<FastifyRequest, VerifiedIdentity>(),
+    assignment = assignmentVerifier(options.tenant, options.assignmentKey);
   app.addHook("onRoute", (route) => {
     if (!ROUTES.has(`${route.method} ${route.url}`))
       throw new Error("Route access must be declared.");
@@ -81,7 +87,7 @@ export function createApp(options: {
             ? "talk:read"
             : "talk:write",
         );
-        actors.set(request, identity.subject);
+        actors.set(request, identity);
       };
     else if (route.url === TALK_PATHS.visitorPreflight)
       route.onRequest = async (request, reply) => {
@@ -233,7 +239,29 @@ export function createApp(options: {
   app.post<{ Params: { id: string } }>(
     TALK_PATHS.rooms + "/:id/assign-self",
     { schema: { params: ROOM_PARAMS, querystring: EMPTY, body: EMPTY } },
-    (request) => rooms.assignSelf(request.params.id, actors.get(request)!),
+    (request) =>
+      rooms.assignSelf(request.params.id, actors.get(request)!.subject),
+  );
+  app.post<{ Params: { id: string }; Body: TalkTrustedAssignment }>(
+    TALK_PATHS.rooms + "/:id/assign",
+    {
+      schema: {
+        params: ROOM_PARAMS,
+        querystring: EMPTY,
+        body: TALK_MEMBER_SCHEMAS.trustedAssignment,
+      },
+    },
+    (request) =>
+      rooms.assign(
+        request.params.id,
+        request.body.memberId,
+        assignment(
+          request.body.authorization,
+          request.params.id,
+          request.body.memberId,
+          actors.get(request)!,
+        ),
+      ),
   );
   app.post<{
     Params: { id: string };
@@ -250,7 +278,7 @@ export function createApp(options: {
     (request) =>
       rooms.reply(
         request.params.id,
-        actors.get(request)!,
+        actors.get(request)!.subject,
         request.body.requestId,
         request.body.text,
       ),
