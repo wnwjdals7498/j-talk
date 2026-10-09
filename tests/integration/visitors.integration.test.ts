@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createHmac, randomUUID } from "node:crypto";
+import { request as httpsRequest } from "node:https";
 import { readFile } from "node:fs/promises";
 import WebSocket from "ws";
 import { integrationRuntime } from "./runtime.js";
@@ -99,6 +100,53 @@ describe("actual visitor HTTP/PG/WSS ownership and recovery", () => {
       ).status,
     ).toBe(403);
     expect((await r.request("/talk/rooms", token.token)).status).toBe(401);
+  });
+  it("enforces issuer limits per gateway client and ignores forged forwarded chains or untrusted peers", async () => {
+    const forwarded = (value: string) =>
+      r.fetch("https://auth.jgw.test:55045/ext/talk/v1/tokens", {
+        method: "POST",
+        headers: {
+          Origin: origin,
+          "Content-Type": "application/json",
+          "X-Forwarded-For": value,
+        },
+        body: "{}",
+      });
+    for (let i = 0; i < 10; i++)
+      expect((await forwarded("203.0.113.10")).status).toBe(201);
+    expect((await forwarded("203.0.113.10")).status).toBe(429);
+    expect((await forwarded("203.0.113.11")).status).toBe(201);
+    expect((await forwarded("203.0.113.99, 203.0.113.10")).status).toBe(429);
+    const ca = await readFile(process.env.JT_TLS_CERTIFICATE!);
+    const untrusted = (value: string) =>
+      new Promise<number>((resolve, reject) => {
+        const request = httpsRequest(
+          "https://127.0.0.1:55045/ext/talk/v1/tokens",
+          {
+            method: "POST",
+            ca,
+            servername: "auth.jgw.test",
+            localAddress: "127.0.0.2",
+            headers: {
+              Origin: origin,
+              "Content-Type": "application/json",
+              "X-Forwarded-For": value,
+            },
+          },
+          (response) => {
+            response.resume();
+            resolve(response.statusCode!);
+          },
+        );
+        request.once("error", reject);
+        request.setTimeout(2000, () =>
+          request.destroy(new Error("Fixture timeout.")),
+        );
+        request.end("{}");
+      });
+    for (let i = 0; i < 10; i++)
+      expect(await untrusted("198.51.100." + (i + 1))).toBe(201);
+    expect(await untrusted("198.51.100.100")).toBe(429);
   });
   it("creates one waiting room and atomically deduplicates concurrent visitor messages without counting retries", async () => {
     const token = await issue(),

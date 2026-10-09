@@ -81,7 +81,9 @@ export function createApp(options: {
   assertCustomerTenantId(options.tenant);
   const app = Fastify({
     exposeHeadRoutes: false,
-    trustProxy: false,
+    // The owned gateway overwrites X-Forwarded-For with the TCP peer. Trust
+    // only that immediate IPv4 loopback hop, never arbitrary peers or chains.
+    trustProxy: (address, hop) => hop === 0 && address === "127.0.0.1",
     bodyLimit: 8192,
     ajv: { customOptions: { removeAdditional: false } },
     ...(options.https ? { https: options.https } : {}),

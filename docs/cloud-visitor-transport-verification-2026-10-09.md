@@ -18,10 +18,12 @@ Shadow DOM FAB·대화창은 출처별 localStorage credential을 다시 쓰며 
 
 ## 실행 증거
 
-Node 22.18.0과 24.19.0에서 전체 `npm run check`와 `npm run test:integration`이 각각 종료 코드 0이다. 통합 시험은 4개 파일, 24개 시험이며 기존 회원/설정 15개, 방문자 8개, 실제 Chromium 위젯 1개다. 격리 tenant, 실제 Auth/Keycloak, PostgreSQL, TLS listener, 실제 WSS와 브라우저를 사용했다.
+Node 22.18.0과 24.19.0에서 전체 `npm run check`와 `npm run test:integration`이 각각 종료 코드 0이다. 최종 통합 시험은 4개 파일, 25개 시험이며 기존 회원/설정 15개, 방문자 9개, 실제 Chromium 위젯 1개다. 격리 tenant, 실제 Auth/Keycloak, PostgreSQL, TLS listener, 실제 WSS와 브라우저를 사용했다.
 
 방문자 시험은 hash-only 저장·다른 tenant·Origin 거절, 동시 UUID 중복 제거, 유효/무효 guest 서명, 회전 경쟁과 만료, cursor 변조/범위, 실제 WSS 회수 종료, 동시 transaction commit 순서, rate limit과 outbox 실패 rollback을 확인했다. Chromium은 방문자 발급·실제 메시지 저장·회원 답장 수신·소켓 단절 후 누락 복구·중복 방지·새로고침 credential 재사용을 확인했다. 실패했던 초기 브라우저 matcher·좁은 화면 overflow는 수정 후 재실행했고 실패 로그는 보존했다.
 
-최종 로그는 `/workspace/.suite-runtime/j-groupware/task25-talk-check-final3-node22.log`, `task25-talk-check-final24.log`, `task25-talk-integration-final22.log`, `task25-talk-integration-final24.log`다. 고객 VM, gateway 외부망, 운영 SMTP/알림 설정, 실제 회사 장비 검증은 이 결과에 포함하지 않는다.
+처음 24개 회귀 통과 뒤 gateway 뒤의 발급 제한이 모든 방문자를 loopback IP 하나로 묶는 문제를 찾았다. 서버가 즉시 IPv4 loopback 첫 hop만 신뢰하도록 보완했다. 실제 HTTPS에서 같은 전달 IP의 10회/11회, 다른 IP의 독립 발급, 위조된 앞쪽 chain의 제한 우회 거절을 확인했다. `127.0.0.2`로 source socket을 바꾼 실제 TLS 요청에서는 매번 다른 X-Forwarded-For를 보내도 실제 peer의 제한을 우회하지 못했다. gateway의 기존 `X-Forwarded-For $remote_addr` 설정과 [Fastify 공식 trustProxy 함수 계약](https://fastify.dev/docs/latest/Reference/Server/#trustproxy)에 따른다. OS 보안 설정은 변경하지 않았다.
+
+최종 로그는 `/workspace/.suite-runtime/j-groupware/task25-talk-gateway-check22.log`, `task25-talk-gateway-check24.log`, `task25-talk-gateway-integration22.log`, `task25-talk-gateway-integration24.log`다. 초기 24개 통과 로그도 보존했다. 고객 VM, gateway 외부망, 운영 SMTP/알림 설정, 실제 회사 장비 검증은 이 결과에 포함하지 않는다.
 
 의존성은 Fastify 5용 [`@fastify/websocket` 공식 저장소](https://github.com/fastify/fastify-websocket)의 hook 인증과 동기 listener 등록 요구를 따른다. 브라우저 시험은 [Playwright 공식 BrowserType 문서](https://playwright.dev/docs/api/class-browsertype), 예제 및 빌드는 [Vite 공식 JS API](https://vite.dev/guide/api-javascript)를 따른다. 새 런타임 의존성은 websocket 11.3.1/ws 8.22.0이며 브라우저 시험 의존성은 Playwright 1.63.0이다.
